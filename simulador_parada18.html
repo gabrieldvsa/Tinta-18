@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulador Parada 18</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eceae6; --panel:#ffffff; --ink:#1d1d1b; --muted:#66645f; --line:#d6d3cd;
+  --accent:#1f4e79; --bezel:#2b2b2b; --chip:#f3f1ed;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1a1a19; --panel:#252523; --ink:#ecebe7; --muted:#a3a19b; --line:#3a3936;
+    --accent:#8fb8de; --bezel:#0d0d0d; --chip:#2f2e2b;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1a1a19; --panel:#252523; --ink:#ecebe7; --muted:#a3a19b; --line:#3a3936;
+  --accent:#8fb8de; --bezel:#0d0d0d; --chip:#2f2e2b;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.45 "Open Sans",system-ui,sans-serif}
+.wrap{display:flex;gap:28px;padding:24px 16px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
+.device{background:var(--bezel);padding:26px 26px 40px;border-radius:18px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);position:relative}
+.device::after{content:"Inkplate 10 · 825 × 1200 · 1 bit";position:absolute;bottom:12px;left:0;right:0;
+  text-align:center;color:#8a8a8a;font-size:11px;letter-spacing:.08em}
+canvas{display:block;width:min(500px,calc(100vw - 84px));height:auto;background:#fff;image-rendering:pixelated;
+  border-radius:2px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px 8px;
+  width:min(380px,100%)}
+h1{font-size:18px;margin:0 0 2px}
+.sub{color:var(--muted);font-size:13px;margin:0 0 14px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:18px 0 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--chip);color:var(--ink);
+  border-radius:8px;padding:6px 10px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--accent);color:var(--panel);border-color:var(--accent)}
+input{font:inherit;font-size:13px;background:var(--chip);color:var(--ink);border:1px solid var(--line);
+  border-radius:8px;padding:5px 8px}
+input[type=number]{width:64px}
+.clock{font-variant-numeric:tabular-nums;font-size:22px;font-weight:700}
+.muted{color:var(--muted);font-size:13px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{text-align:left;padding:4px 4px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:400}
+.legend div{display:flex;gap:10px;align-items:center;margin:6px 0;font-size:13px}
+.legend svg{flex:none}
+label{font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="device"><canvas id="pantalla" width="825" height="1200"></canvas></div>
+
+  <div class="panel">
+    <h1>Simulador · Parada 18</h1>
+    <p class="sub">Ave. Ponce de León, dirección este (GTFS stop_id 44). Horario programado de la ATI.</p>
+
+    <div class="row" style="justify-content:space-between">
+      <div><div class="muted" id="modoTxt">Hora de Puerto Rico</div><div class="clock" id="relojTxt">--</div></div>
+      <div class="muted" id="diaTxt"></div>
+    </div>
+
+    <h2>Hora</h2>
+    <div class="row">
+      <button id="btnReal" aria-pressed="true">Ahora</button>
+      <input type="date" id="inFecha"> <input type="time" id="inHora">
+    </div>
+    <div class="row" style="margin-top:8px" id="presets"></div>
+
+    <h2>Velocidad</h2>
+    <div class="row" id="velocidades"></div>
+
+    <h2>Refresco de tinta electrónica</h2>
+    <div class="row">
+      <label><input type="checkbox" id="chkFlash" checked> Simular parpadeo</label>
+      <label>Completo cada <input type="number" id="inCompleto" min="1" max="120" value="30"> parciales</label>
+    </div>
+    <p class="muted" id="refTxt" style="margin:6px 0 0"></p>
+
+    <h2>Qué significan las flechas</h2>
+    <div class="legend">
+      <div><svg width="78" height="26" viewBox="0 0 78 26"><g id="lgA"></g></svg>
+        <span><b>Llegando</b>: falta menos de 1 minuto.</span></div>
+      <div><svg width="78" height="26" viewBox="0 0 78 26"><g id="lgB"></g></svg>
+        <span><b>Acaba de pasar</b> (hace menos de 2 min). Si viene tarde, aún puede llegar.</span></div>
+    </div>
+
+    <h2>Detalle de lo que se muestra</h2>
+    <table><thead><tr><th>Ruta</th><th>Estado</th><th>Hora prog.</th><th>Destino</th></tr></thead>
+      <tbody id="tabla"></tbody></table>
+
+    <h2>Logo</h2>
+    <div class="row"><input type="file" id="inLogo" accept="image/*"><button id="btnLogoReset">Original</button></div>
+    <p class="muted">Horario GTFS vigente: <span id="vigTxt"></span></p>
+  </div>
+</div>
+
+<script>
+// ======================= DATOS =======================
+const HORARIO = {"parada":{"stop_id":"44","nombre":"Parada 18 · Ponce de León","gtfs_nombre":"Ave. Juan Ponce de Leon lado opuesto calle  Villamil","lat":18.4505,"lon":-66.07415},"vigencia":["20260720","20270719"],"version_gtfs":"Updated: Aug 26, 2026, 11:08 AM","horas_aproximadas":true,"patrones":{"P1":[[312,"5","Iturregui"],[319,"3","Sagrado Corazón"],[339,"3","Sagrado Corazón"],[340,"35","Sagrado Corazón"],[352,"5","Iturregui"],[359,"3","Sagrado Corazón"],[370,"35","Sagrado Corazón"],[372,"5","Iturregui"],[379,"3","Sagrado Corazón"],[389,"3","Sagrado Corazón"],[399,"3","Sagrado Corazón"],[400,"35","Sagrado Corazón"],[409,"3","Sagrado Corazón"],[412,"5","Iturregui"],[419,"3","Sagrado Corazón"],[429,"3","Sagrado Corazón"],[430,"35","Sagrado Corazón"],[432,"5","Iturregui"],[439,"3","Sagrado Corazón"],[449,"3","Sagrado Corazón"],[452,"5","Iturregui"],[459,"3","Sagrado Corazón"],[460,"35","Sagrado Corazón"],[469,"3","Sagrado Corazón"],[472,"5","Iturregui"],[479,"3","Sagrado Corazón"],[489,"3","Sagrado Corazón"],[490,"35","Sagrado Corazón"],[496,"5","Iturregui"],[499,"3","Sagrado Corazón"],[509,"3","Sagrado Corazón"],[516,"5","Iturregui"],[519,"3","Sagrado Corazón"],[520,"35","Sagrado Corazón"],[529,"3","Sagrado Corazón"],[536,"5","Iturregui"],[539,"3","Sagrado Corazón"],[549,"3","Sagrado Corazón"],[550,"35","Sagrado Corazón"],[556,"5","Iturregui"],[559,"3","Sagrado Corazón"],[576,"5","Iturregui"],[579,"3","Sagrado Corazón"],[580,"35","Sagrado Corazón"],[596,"5","Iturregui"],[599,"3","Sagrado Corazón"],[610,"35","Sagrado Corazón"],[616,"5","Iturregui"],[619,"3","Sagrado Corazón"],[636,"5","Iturregui"],[639,"3","Sagrado Corazón"],[640,"35","Sagrado Corazón"],[656,"5","Iturregui"],[659,"3","Sagrado Corazón"],[670,"35","Sagrado Corazón"],[676,"5","Iturregui"],[679,"3","Sagrado Corazón"],[696,"5","Iturregui"],[699,"3","Sagrado Corazón"],[700,"35","Sagrado Corazón"],[716,"5","Iturregui"],[719,"3","Sagrado Corazón"],[730,"35","Sagrado Corazón"],[736,"5","Iturregui"],[739,"3","Sagrado Corazón"],[759,"3","Sagrado Corazón"],[760,"35","Sagrado Corazón"],[764,"5","Iturregui"],[779,"3","Sagrado Corazón"],[784,"5","Iturregui"],[790,"35","Sagrado Corazón"],[799,"3","Sagrado Corazón"],[804,"5","Iturregui"],[819,"3","Sagrado Corazón"],[820,"35","Sagrado Corazón"],[824,"5","Iturregui"],[839,"3","Sagrado Corazón"],[844,"5","Iturregui"],[850,"35","Sagrado Corazón"],[859,"3","Sagrado Corazón"],[864,"5","Iturregui"],[879,"3","Sagrado Corazón"],[880,"35","Sagrado Corazón"],[884,"5","Iturregui"],[899,"3","Sagrado Corazón"],[904,"5","Iturregui"],[910,"35","Sagrado Corazón"],[919,"3","Sagrado Corazón"],[924,"5","Iturregui"],[929,"3","Sagrado Corazón"],[939,"3","Sagrado Corazón"],[940,"35","Sagrado Corazón"],[944,"5","Iturregui"],[949,"3","Sagrado Corazón"],[959,"3","Sagrado Corazón"],[964,"5","Iturregui"],[969,"3","Sagrado Corazón"],[970,"35","Sagrado Corazón"],[979,"3","Sagrado Corazón"],[984,"5","Iturregui"],[989,"3","Sagrado Corazón"],[999,"3","Sagrado Corazón"],[999,"5","Iturregui"],[1000,"35","Sagrado Corazón"],[1009,"3","Sagrado Corazón"],[1019,"3","Sagrado Corazón"],[1019,"5","Iturregui"],[1029,"3","Sagrado Corazón"],[1030,"35","Sagrado Corazón"],[1039,"3","Sagrado Corazón"],[1039,"5","Iturregui"],[1049,"3","Sagrado Corazón"],[1059,"3","Sagrado Corazón"],[1059,"5","Iturregui"],[1060,"35","Sagrado Corazón"],[1069,"3","Sagrado Corazón"],[1079,"3","Sagrado Corazón"],[1079,"5","Iturregui"],[1089,"3","Sagrado Corazón"],[1090,"35","Sagrado Corazón"],[1096,"3","Sagrado Corazón"],[1099,"5","Iturregui"],[1120,"35","Sagrado Corazón"],[1126,"3","Sagrado Corazón"],[1129,"5","Iturregui"],[1150,"35","Sagrado Corazón"],[1153,"5","Iturregui"],[1156,"3","Sagrado Corazón"],[1180,"35","Sagrado Corazón"],[1183,"5","Iturregui"],[1186,"3","Sagrado Corazón"],[1210,"35","Sagrado Corazón"],[1213,"5","Iturregui"],[1216,"3","Sagrado Corazón"],[1240,"35","Sagrado Corazón"],[1243,"5","Iturregui"],[1246,"3","Sagrado Corazón"],[1273,"5","Iturregui"],[1276,"3","Sagrado Corazón"],[1306,"3","Sagrado Corazón"],[1336,"3","Sagrado Corazón"],[1366,"3","Sagrado Corazón"],[1396,"3","Sagrado Corazón"]],"P2":[[377,"3","Sagrado Corazón"],[397,"3","Sagrado Corazón"],[417,"3","Sagrado Corazón"],[437,"3","Sagrado Corazón"],[457,"3","Sagrado Corazón"],[477,"3","Sagrado Corazón"],[497,"3","Sagrado Corazón"],[517,"3","Sagrado Corazón"],[537,"3","Sagrado Corazón"],[557,"3","Sagrado Corazón"],[577,"3","Sagrado Corazón"],[597,"3","Sagrado Corazón"],[617,"3","Sagrado Corazón"],[637,"3","Sagrado Corazón"],[657,"3","Sagrado Corazón"],[677,"3","Sagrado Corazón"],[697,"3","Sagrado Corazón"],[717,"3","Sagrado Corazón"],[737,"3","Sagrado Corazón"],[757,"3","Sagrado Corazón"],[777,"3","Sagrado Corazón"],[797,"3","Sagrado Corazón"],[817,"3","Sagrado Corazón"],[837,"3","Sagrado Corazón"],[857,"3","Sagrado Corazón"],[877,"3","Sagrado Corazón"],[897,"3","Sagrado Corazón"],[917,"3","Sagrado Corazón"],[937,"3","Sagrado Corazón"],[957,"3","Sagrado Corazón"],[977,"3","Sagrado Corazón"],[997,"3","Sagrado Corazón"],[1017,"3","Sagrado Corazón"],[1037,"3","Sagrado Corazón"],[1057,"3","Sagrado Corazón"],[1077,"3","Sagrado Corazón"],[1097,"3","Sagrado Corazón"],[1127,"3","Sagrado Corazón"],[1157,"3","Sagrado Corazón"],[1187,"3","Sagrado Corazón"],[1217,"3","Sagrado Corazón"],[1247,"3","Sagrado Corazón"],[1277,"3","Sagrado Corazón"],[1307,"3","Sagrado Corazón"],[1337,"3","Sagrado Corazón"],[1367,"3","Sagrado Corazón"],[1397,"3","Sagrado Corazón"]],"P3":[[342,"5","Iturregui"],[377,"3","Sagrado Corazón"],[397,"3","Sagrado Corazón"],[407,"5","Iturregui"],[417,"3","Sagrado Corazón"],[437,"3","Sagrado Corazón"],[452,"5","Iturregui"],[457,"3","Sagrado Corazón"],[477,"3","Sagrado Corazón"],[477,"5","Iturregui"],[497,"3","Sagrado Corazón"],[504,"5","Iturregui"],[517,"3","Sagrado Corazón"],[534,"5","Iturregui"],[537,"3","Sagrado Corazón"],[557,"3","Sagrado Corazón"],[566,"5","Iturregui"],[577,"3","Sagrado Corazón"],[597,"3","Sagrado Corazón"],[598,"5","Iturregui"],[617,"3","Sagrado Corazón"],[637,"3","Sagrado Corazón"],[639,"5","Iturregui"],[657,"3","Sagrado Corazón"],[671,"5","Iturregui"],[678,"3","Sagrado Corazón"],[698,"3","Sagrado Corazón"],[703,"5","Iturregui"],[718,"3","Sagrado Corazón"],[735,"5","Iturregui"],[738,"3","Sagrado Corazón"],[758,"3","Sagrado Corazón"],[767,"5","Iturregui"],[778,"3","Sagrado Corazón"],[798,"3","Sagrado Corazón"],[799,"5","Iturregui"],[818,"3","Sagrado Corazón"],[831,"5","Iturregui"],[838,"3","Sagrado Corazón"],[858,"3","Sagrado Corazón"],[863,"5","Iturregui"],[878,"3","Sagrado Corazón"],[895,"5","Iturregui"],[898,"3","Sagrado Corazón"],[918,"3","Sagrado Corazón"],[928,"5","Iturregui"],[938,"3","Sagrado Corazón"],[957,"3","Sagrado Corazón"],[960,"5","Iturregui"],[977,"3","Sagrado Corazón"],[992,"5","Iturregui"],[997,"3","Sagrado Corazón"],[1017,"3","Sagrado Corazón"],[1025,"5","Iturregui"],[1037,"3","Sagrado Corazón"],[1057,"3","Sagrado Corazón"],[1057,"5","Iturregui"],[1077,"3","Sagrado Corazón"],[1093,"5","Iturregui"],[1097,"3","Sagrado Corazón"],[1127,"3","Sagrado Corazón"],[1142,"5","Iturregui"],[1157,"3","Sagrado Corazón"],[1182,"5","Iturregui"],[1187,"3","Sagrado Corazón"],[1212,"5","Iturregui"],[1217,"3","Sagrado Corazón"],[1247,"3","Sagrado Corazón"],[1277,"3","Sagrado Corazón"],[1307,"3","Sagrado Corazón"],[1337,"3","Sagrado Corazón"],[1367,"3","Sagrado Corazón"],[1397,"3","Sagrado Corazón"]]},"fechas":{"20260720":"P1","20260721":"P1","20260722":"P1","20260723":"P1","20260724":"P1","20260725":"P3","20260726":"P2","20260727":"P3","20260728":"P1","20260729":"P1","20260730":"P1","20260731":"P1","20260801":"P3","20260802":"P2","20260803":"P1","20260804":"P1","20260805":"P1","20260806":"P1","20260807":"P1","20260808":"P3","20260809":"P2","20260810":"P1","20260811":"P1","20260812":"P1","20260813":"P1","20260814":"P1","20260815":"P3","20260816":"P2","20260817":"P1","20260818":"P1","20260819":"P1","20260820":"P1","20260821":"P1","20260822":"P3","20260823":"P2","20260824":"P1","20260825":"P1","20260826":"P1","20260827":"P1","20260828":"P1","20260829":"P3","20260830":"P2","20260831":"P1","20260901":"P1","20260902":"P1","20260903":"P1","20260904":"P1","20260905":"P3","20260906":"P2","20260907":"P3","20260908":"P1","20260909":"P1","20260910":"P1","20260911":"P1","20260912":"P3","20260913":"P2","20260914":"P1","20260915":"P1","20260916":"P1","20260917":"P1","20260918":"P1","20260919":"P3","20260920":"P2","20260921":"P1","20260922":"P1","20260923":"P1","20260924":"P1","20260925":"P1","20260926":"P3","20260927":"P2","20260928":"P1","20260929":"P1","20260930":"P1","20261001":"P1","20261002":"P1","20261003":"P3","20261004":"P2","20261005":"P1","20261006":"P1","20261007":"P1","20261008":"P1","20261009":"P1","20261010":"P3","20261011":"P2","20261012":"P3","20261013":"P1","20261014":"P1","20261015":"P1","20261016":"P1","20261017":"P3","20261018":"P2","20261019":"P1","20261020":"P1","20261021":"P1","20261022":"P1","20261023":"P1","20261024":"P3","20261025":"P2","20261026":"P1","20261027":"P1","20261028":"P1","20261029":"P1","20261030":"P1","20261031":"P3","20261101":"P2","20261102":"P1","20261103":"P1","20261104":"P1","20261105":"P1","20261106":"P1","20261107":"P3","20261108":"P2","20261109":"P1","20261110":"P1","20261111":"P3","20261112":"P1","20261113":"P1","20261114":"P3","20261115":"P2","20261116":"P1","20261117":"P1","20261118":"P1","20261119":"P3","20261120":"P1","20261121":"P3","20261122":"P2","20261123":"P1","20261124":"P1","20261125":"P1","20261126":"P3","20261127":"P1","20261128":"P3","20261129":"P2","20261130":"P1","20261201":"P1","20261202":"P1","20261203":"P1","20261204":"P1","20261205":"P3","20261206":"P2","20261207":"P1","20261208":"P1","20261209":"P1","20261210":"P1","20261211":"P1","20261212":"P3","20261213":"P2","20261214":"P1","20261215":"P1","20261216":"P1","20261217":"P1","20261218":"P1","20261219":"P3","20261220":"P2","20261221":"P1","20261222":"P1","20261223":"P1","20261224":"P1","20261225":"P3","20261226":"P3","20261227":"P2","20261228":"P1","20261229":"P1","20261230":"P1","20261231":"P1","20270101":"P3","20270102":"P3","20270103":"P2","20270104":"P1","20270105":"P1","20270106":"P3","20270107":"P1","20270108":"P1","20270109":"P3","20270110":"P2","20270111":"P3","20270112":"P1","20270113":"P1","20270114":"P1","20270115":"P1","20270116":"P3","20270117":"P2","20270118":"P3","20270119":"P1","20270120":"P1","20270121":"P1","20270122":"P1","20270123":"P3","20270124":"P2","20270125":"P1","20270126":"P1","20270127":"P1","20270128":"P1","20270129":"P1","20270130":"P3","20270131":"P2","20270201":"P1","20270202":"P1","20270203":"P1","20270204":"P1","20270205":"P1","20270206":"P3","20270207":"P2","20270208":"P1","20270209":"P1","20270210":"P1","20270211":"P1","20270212":"P1","20270213":"P3","20270214":"P2","20270215":"P3","20270216":"P1","20270217":"P1","20270218":"P1","20270219":"P1","20270220":"P3","20270221":"P2","20270222":"P1","20270223":"P1","20270224":"P1","20270225":"P1","20270226":"P1","20270227":"P3","20270228":"P2","20270301":"P1","20270302":"P3","20270303":"P1","20270304":"P1","20270305":"P1","20270306":"P3","20270307":"P2","20270308":"P1","20270309":"P1","20270310":"P1","20270311":"P1","20270312":"P1","20270313":"P3","20270314":"P2","20270315":"P1","20270316":"P1","20270317":"P1","20270318":"P1","20270319":"P1","20270320":"P3","20270321":"P2","20270322":"P3","20270323":"P1","20270324":"P1","20270325":"P1","20270326":"P3","20270327":"P3","20270328":"P2","20270329":"P1","20270330":"P1","20270331":"P1","20270401":"P1","20270402":"P1","20270403":"P3","20270404":"P2","20270405":"P1","20270406":"P1","20270407":"P1","20270408":"P1","20270409":"P1","20270410":"P3","20270411":"P2","20270412":"P1","20270413":"P1","20270414":"P1","20270415":"P1","20270416":"P1","20270417":"P3","20270418":"P2","20270419":"P1","20270420":"P1","20270421":"P1","20270422":"P1","20270423":"P1","20270424":"P3","20270425":"P2","20270426":"P1","20270427":"P1","20270428":"P1","20270429":"P1","20270430":"P1","20270501":"P3","20270502":"P2","20270503":"P1","20270504":"P1","20270505":"P1","20270506":"P1","20270507":"P1","20270508":"P3","20270509":"P2","20270510":"P1","20270511":"P1","20270512":"P1","20270513":"P1","20270514":"P1","20270515":"P3","20270516":"P2","20270517":"P1","20270518":"P1","20270519":"P1","20270520":"P1","20270521":"P1","20270522":"P3","20270523":"P2","20270524":"P1","20270525":"P1","20270526":"P1","20270527":"P1","20270528":"P1","20270529":"P3","20270530":"P2","20270531":"P3","20270601":"P1","20270602":"P1","20270603":"P1","20270604":"P1","20270605":"P3","20270606":"P2","20270607":"P1","20270608":"P1","20270609":"P1","20270610":"P1","20270611":"P1","20270612":"P3","20270613":"P2","20270614":"P1","20270615":"P1","20270616":"P1","20270617":"P1","20270618":"P1","20270619":"P3","20270620":"P2","20270621":"P1","20270622":"P1","20270623":"P1","20270624":"P1","20270625":"P1","20270626":"P3","20270627":"P2","20270628":"P1","20270629":"P1","20270630":"P1","20270701":"P1","20270702":"P1","20270703":"P3","20270704":"P3","20270705":"P1","20270706":"P1","20270707":"P1","20270708":"P1","20270709":"P1","20270710":"P3","20270711":"P2","20270712":"P1","20270713":"P1","20270714":"P1","20270715":"P1","20270716":"P1","20270717":"P3","20270718":"P2","20270719":"P1"}};
+const LOGO_ORIGINAL = "data:image/png;base64,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";
+
+// ============ LÓGICA (espejo de llegadas.py) ============
+const ETIQUETAS = {"3":"T3","5":"T5","35":"C35"};
+const SALIO_SEG = 120, LLEGANDO_SEG = 60;
+
+const diasDesdeEpoca = (y,m,d) => Math.round(Date.UTC(y,m-1,d)/86400000);
+function fechaDesdeDias(z){ const t=new Date(z*86400000); return [t.getUTCFullYear(),t.getUTCMonth()+1,t.getUTCDate()]; }
+const clave = (y,m,d) => String(y).padStart(4,"0")+String(m).padStart(2,"0")+String(d).padStart(2,"0");
+function salidasDelDia(k){ const p=HORARIO.fechas[k]; if(p===undefined) return null; return HORARIO.patrones[p]||[]; }
+function horaTxt(min){ min=((min%1440)+1440)%1440; let h=Math.floor(min/60), m=min%60;
+  const suf=h<12?"am":"pm"; h=h%12||12; return h+":"+String(m).padStart(2,"0")+" "+suf; }
+
+function filasPantalla(ahora, filas=5, ventanaMin=180){
+  const [y,mo,d,hh,mi,ss]=ahora;
+  const hoy=diasDesdeEpoca(y,mo,d), ahoraS=hh*3600+mi*60+ss;
+  const cand=[];
+  for(const desfase of [0,-1]){
+    const sal=salidasDelDia(clave(...fechaDesdeDias(hoy+desfase)));
+    if(sal===null){ if(desfase===0) return null; continue; }
+    for(const [minuto,ruta,destino] of sal){
+      const delta=minuto*60+desfase*86400-ahoraS;
+      if(delta>-SALIO_SEG && delta<=ventanaMin*60) cand.push([delta,ruta,destino,minuto]);
+    }
+  }
+  cand.sort((a,b)=>a[0]-b[0] || (a[1]<b[1]?-1:a[1]>b[1]?1:0));
+  return cand.slice(0,filas).map(([delta,ruta,destino,minuto])=>({
+    ruta:ETIQUETAS[ruta]||ruta,
+    estado: delta<=0?"salio":(delta<=LLEGANDO_SEG?"llegando":"min"),
+    min: delta>0?Math.floor((delta+59)/60):0,
+    hora:horaTxt(minuto), destino
+  }));
+}
+function primeraSiguiente(ahora){
+  const hoy=diasDesdeEpoca(ahora[0],ahora[1],ahora[2]);
+  for(let i=1;i<=7;i++){
+    const sal=salidasDelDia(clave(...fechaDesdeDias(hoy+i)));
+    if(sal===null) return null;
+    if(sal.length){ const [m,r]=sal[0]; return {ruta:ETIQUETAS[r]||r, hora:horaTxt(m), dias:i}; }
+  }
+  return null;
+}
+window.filasPantalla = filasPantalla; // para pruebas
+
+// ======================= DIBUJO =======================
+const W=825, H=1200;
+const cv=document.getElementById("pantalla"), ctx=cv.getContext("2d",{willReadFrequently:true});
+const FONT='"Open Sans", Arial, sans-serif';
+let logoImg=null;
+
+function cargarLogo(src){ const im=new Image(); im.onload=()=>{logoImg=im; refrescar("parcial",true);}; im.src=src; }
+
+function texto(t,x,y,size,bold,align="left"){ ctx.font=(bold?"700 ":"400 ")+size+"px "+FONT; ctx.textAlign=align; ctx.fillText(t,x,y); }
+function textoMixto(partes,cx,y,size){ // [[texto,bold],...] centrado
+  let ancho=0; for(const [t,b] of partes){ ctx.font=(b?"700 ":"400 ")+size+"px "+FONT; ancho+=ctx.measureText(t).width; }
+  let x=cx-ancho/2; ctx.textAlign="left";
+  for(const [t,b] of partes){ ctx.font=(b?"700 ":"400 ")+size+"px "+FONT; ctx.fillText(t,x,y); x+=ctx.measureText(t).width; }
+}
+
+// --- reloj de 7 segmentos ---
+const SEG={0:"abcdef",1:"bc",2:"abged",3:"abgcd",4:"fgbc",5:"afgcd",6:"afgedc",7:"abc",8:"abcdefg",9:"abcdfg"};
+function segH(x,y,L,t){ ctx.beginPath(); ctx.moveTo(x,y+t/2); ctx.lineTo(x+t/2,y); ctx.lineTo(x+L-t/2,y); ctx.lineTo(x+L,y+t/2); ctx.lineTo(x+L-t/2,y+t); ctx.lineTo(x+t/2,y+t); ctx.closePath(); ctx.fill(); }
+function segV(x,y,L,t){ ctx.beginPath(); ctx.moveTo(x+t/2,y); ctx.lineTo(x+t,y+t/2); ctx.lineTo(x+t,y+L-t/2); ctx.lineTo(x+t/2,y+L); ctx.lineTo(x,y+L-t/2); ctx.lineTo(x,y+t/2); ctx.closePath(); ctx.fill(); }
+function digito(n,x,y,w,h,t){
+  const s=SEG[n], g=2, half=h/2;
+  if(s.includes("a")) segH(x+t/2+g,y,w-t-2*g,t);
+  if(s.includes("g")) segH(x+t/2+g,y+half-t/2,w-t-2*g,t);
+  if(s.includes("d")) segH(x+t/2+g,y+h-t,w-t-2*g,t);
+  if(s.includes("f")) segV(x,y+t/2+g,half-t/2-2*g,t);
+  if(s.includes("b")) segV(x+w-t,y+t/2+g,half-t/2-2*g,t);
+  if(s.includes("e")) segV(x,y+half+g,half-t/2-2*g,t);
+  if(s.includes("c")) segV(x+w-t,y+half+g,half-t/2-2*g,t);
+}
+function reloj(hh,mm,derecha,y){
+  const w=44,h=78,t=10,esp=12,col=18;
+  let h12=hh%12||12; const ds=[...String(h12).padStart(2," "),":",...String(mm).padStart(2,"0")];
+  const anchoTotal=4*w+3*esp+col+esp; let x=derecha-anchoTotal;
+  for(const c of ds){
+    if(c===":"){ ctx.fillRect(x+3,y+h*0.28,t,t); ctx.fillRect(x+3,y+h*0.62,t,t); x+=col+esp; continue; }
+    if(c!==" ") digito(+c,x,y,w,h,t); x+=w+esp;
+  }
+  return derecha-anchoTotal/2;
+}
+
+// --- íconos ---
+function rr(x,y,w,h,r){ ctx.beginPath(); ctx.roundRect(x,y,w,h,r); }
+function bus(x,y,w,h){
+  ctx.fillStyle="#000"; const bh=h*0.86;
+  rr(x,y,w,bh,[12,22,22,12]); ctx.fill();
+  ctx.fillStyle="#fff";
+  ctx.fillRect(x+w*0.07,y+h*0.12,w*0.05,h*0.60);           // puerta
+  const vx=x+w*0.17, vw=w*0.62, n=3, gap=w*0.03, ww=(vw-gap*(n-1))/n;
+  for(let i=0;i<n;i++) ctx.fillRect(vx+i*(ww+gap),y+h*0.12,ww,h*0.36); // ventanas
+  ctx.fillRect(x+w*0.86,y+h*0.12,w*0.055,h*0.58);          // parabrisas
+  for(const cx of [x+w*0.27,x+w*0.76]){ ctx.beginPath(); ctx.arc(cx,y+bh,h*0.12,0,7); ctx.fillStyle="#fff"; ctx.fill();
+    ctx.lineWidth=6; ctx.strokeStyle="#000"; ctx.stroke(); }
+  ctx.fillStyle="#000";
+}
+function flecha(x,y,w,h,c=ctx){
+  c.beginPath(); c.moveTo(x,y+h*0.28); c.lineTo(x+w*0.55,y+h*0.28); c.lineTo(x+w*0.55,y);
+  c.lineTo(x+w,y+h/2); c.lineTo(x+w*0.55,y+h); c.lineTo(x+w*0.55,y+h*0.72); c.lineTo(x,y+h*0.72); c.closePath();
+  c.lineJoin="round"; c.lineWidth=Math.max(2,h*0.12); c.strokeStyle="#000"; c.fillStyle="#000"; c.fill(); c.stroke();
+}
+
+function marco(y,h){ ctx.save(); ctx.setLineDash([20,11]); ctx.lineWidth=6; ctx.strokeStyle="#000"; ctx.strokeRect(17,y,W-34,h); ctx.restore(); }
+
+function dibujar(ahora){
+  const [y,mo,d,hh,mi]=ahora;
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,W,H); ctx.fillStyle="#000";
+
+  // Encabezado
+  ctx.lineWidth=12; ctx.strokeStyle="#000"; ctx.strokeRect(20,20,W-40,268);
+  if(logoImg){ const mw=270, mh=96, s=Math.min(mw/logoImg.width,mh/logoImg.height);
+    ctx.drawImage(logoImg,42,42,logoImg.width*s,logoImg.height*s); }
+  else { ctx.save(); ctx.setLineDash([8,6]); ctx.lineWidth=3; ctx.strokeRect(42,42,260,90); ctx.restore(); texto("LOGO",172,98,28,true,"center"); }
+  const cx=reloj(hh,mi,W-46,42);
+  texto(hh<12?"am":"pm",W-46,150,22,true,"right");
+  texto(String(d).padStart(2,"0")+"/"+String(mo).padStart(2,"0")+"/"+y,cx-20,150,22,false,"center");
+  textoMixto([["Próxima Guagua / ",true],["Next Bus",false]],W/2,212,48);
+  textoMixto([["Ruta / ",true],["Route",false]],205,266,32);
+  textoMixto([["Minutos / ",true],["Minutes",false]],590,266,32);
+
+  // Filas
+  const top=304, alto=166, n=5, filas=filasPantalla(ahora,n);
+  for(let i=0;i<n;i++) marco(top+i*alto, alto-8);
+
+  if(filas===null){
+    textoMixto([["Horario vencido",true]],W/2,top+alto*2+60,56);
+    textoMixto([["Schedule expired",false]],W/2,top+alto*2+130,44);
+  } else if(filas.length===0){
+    const sig=primeraSiguiente(ahora);
+    textoMixto([["Servicio terminado",true]],W/2,top+alto+70,56);
+    textoMixto([["No more buses today",false]],W/2,top+alto+135,40);
+    if(sig){ textoMixto([[sig.dias===1?"Primera mañana / ":"Próxima salida / ",true],[sig.dias===1?"First tomorrow":"Next departure",false]],W/2,top+alto*3+40,32);
+      textoMixto([[sig.ruta+"  ",true],[sig.hora,false]],W/2,top+alto*3+120,72); }
+  } else {
+    filas.forEach((f,i)=>{
+      const ry=top+i*alto, cyc=ry+(alto-8)/2;
+      texto(f.ruta,52,cyc+40,112,true);
+      if(f.estado==="llegando"){ bus(400,cyc-54,260,108); flecha(682,cyc-34,112,64); }
+      else if(f.estado==="salio"){ flecha(400,cyc-34,112,64); bus(534,cyc-54,260,108); }
+      else if(f.min<=60){ texto(f.min+" min",W-44,cyc+40,112,false,"right"); }
+      else { texto(f.hora,W-44,cyc+30,84,false,"right"); }
+    });
+  }
+
+  // Pie
+  textoMixto([["Horario programado, no en tiempo real · ",false],["Scheduled times",false]],W/2,1180,21);
+
+  // Umbral a 1 bit (como la Inkplate en modo de actualización parcial)
+  try{
+    const img=ctx.getImageData(0,0,W,H), p=img.data;
+    for(let k=0;k<p.length;k+=4){ const v=(p[k]*299+p[k+1]*587+p[k+2]*114)/1000<140?0:255; p[k]=p[k+1]=p[k+2]=v; p[k+3]=255; }
+    ctx.putImageData(img,0,0);
+  }catch(e){}
+  return filas;
+}
+
+// ======================= TIEMPO =======================
+const fmtPR=new Intl.DateTimeFormat("en-US",{timeZone:"America/Puerto_Rico",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit",hourCycle:"h23"});
+function ahoraPR(){ const o={}; for(const p of fmtPR.formatToParts(new Date())) o[p.type]=p.value;
+  return Date.UTC(+o.year,+o.month-1,+o.day,+o.hour,+o.minute,+o.second); }
+const partes = ms => { const t=new Date(ms); return [t.getUTCFullYear(),t.getUTCMonth()+1,t.getUTCDate(),t.getUTCHours(),t.getUTCMinutes(),t.getUTCSeconds()]; };
+
+let modoReal=true, velocidad=1, simBase=ahoraPR(), realBase=performance.now();
+function tiempoActual(){ return modoReal ? ahoraPR() : simBase+(performance.now()-realBase)*velocidad; }
+function fijarSim(ms){ modoReal=false; simBase=ms; realBase=performance.now(); ultimoMin=null; actualizarUI(); }
+
+// ======================= REFRESCO =======================
+let ultimoMin=null, parciales=0, ocupado=false, ultimasFilas=[];
+const DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"];
+
+function momento(){ const a=partes(tiempoActual()); a[5]=0; return a; } // la placa dibuja al segundo 0 de cada minuto
+function refrescar(tipo, forzar=false){
+  if(tipo==="completo" && document.getElementById("chkFlash").checked && !ocupado){
+    ocupado=true; const pasos=["#000","#fff","#000","#fff"]; let i=0;
+    const paso=()=>{ if(i<pasos.length){ ctx.fillStyle=pasos[i++]; ctx.fillRect(0,0,W,H); setTimeout(paso,Math.max(60,160/Math.sqrt(velocidad))); }
+      else { ultimasFilas=dibujar(momento()); ocupado=false; pintarTabla(); } };
+    paso();
+  } else if(!ocupado){ ultimasFilas=dibujar(momento()); pintarTabla(); }
+}
+
+function pintarTabla(){
+  const tb=document.getElementById("tabla"); tb.innerHTML="";
+  const nombres={salio:"Acaba de pasar",llegando:"Llegando",min:""};
+  if(!ultimasFilas){ tb.innerHTML='<tr><td colspan="4">GTFS vencido</td></tr>'; return; }
+  if(!ultimasFilas.length){ tb.innerHTML='<tr><td colspan="4">Sin más salidas hoy</td></tr>'; return; }
+  for(const f of ultimasFilas){ const tr=document.createElement("tr");
+    tr.innerHTML=`<td><b>${f.ruta}</b></td><td>${nombres[f.estado]||f.min+" min"}</td><td>${f.hora}</td><td>${f.destino}</td>`; tb.appendChild(tr); }
+}
+
+function bucle(){
+  const ms=tiempoActual(), a=partes(ms);
+  document.getElementById("relojTxt").textContent=horaTxt(a[3]*60+a[4]).replace(" ",":"+String(a[5]).padStart(2,"0")+" ");
+  document.getElementById("diaTxt").textContent=DIAS[new Date(ms).getUTCDay()]+" "+a[2]+"/"+a[1]+"/"+a[0];
+  const k=Math.floor(ms/60000);
+  if(k!==ultimoMin){
+    const N=Math.max(1,+document.getElementById("inCompleto").value||30);
+    const completo = ultimoMin===null || parciales>=N;
+    if(completo) parciales=0; else parciales++;
+    ultimoMin=k; refrescar(completo?"completo":"parcial");
+    document.getElementById("refTxt").textContent=`Parciales desde el último completo: ${parciales} de ${N}`;
+  }
+  requestAnimationFrame(bucle);
+}
+
+// ======================= UI =======================
+function actualizarUI(){
+  document.getElementById("btnReal").setAttribute("aria-pressed",modoReal);
+  document.getElementById("modoTxt").textContent=modoReal?"Hora de Puerto Rico (ahora)":"Hora simulada";
+  const a=partes(tiempoActual());
+  document.getElementById("inFecha").value=`${a[0]}-${String(a[1]).padStart(2,"0")}-${String(a[2]).padStart(2,"0")}`;
+  document.getElementById("inHora").value=`${String(a[3]).padStart(2,"0")}:${String(a[4]).padStart(2,"0")}`;
+  document.querySelectorAll("#velocidades button").forEach(b=>b.setAttribute("aria-pressed",!modoReal&&+b.dataset.v===velocidad || modoReal&&b.dataset.v==="1"));
+}
+document.getElementById("btnReal").onclick=()=>{ modoReal=true; velocidad=1; ultimoMin=null; actualizarUI(); };
+function desdeInputs(){ const f=document.getElementById("inFecha").value, h=document.getElementById("inHora").value; if(!f||!h) return;
+  const [Y,M,D]=f.split("-").map(Number), [hh,mm]=h.split(":").map(Number); fijarSim(Date.UTC(Y,M-1,D,hh,mm,0)); }
+document.getElementById("inFecha").onchange=desdeInputs; document.getElementById("inHora").onchange=desdeInputs;
+
+const PRESETS=[["Hora pico L–V",[2026,10,15,7,29]],["Sábado",[2026,10,17,14,0]],["Domingo",[2026,10,18,9,0]],
+  ["Feriado (12 oct)",[2026,10,12,8,0]],["Última del día",[2026,10,15,23,12]],["Madrugada",[2026,10,16,4,58]]];
+for(const [n,[Y,M,D,h,m]] of PRESETS){ const b=document.createElement("button"); b.textContent=n;
+  b.onclick=()=>fijarSim(Date.UTC(Y,M-1,D,h,m,0)); document.getElementById("presets").appendChild(b); }
+for(const [n,v] of [["1×",1],["10×",10],["60× (1 min/s)",60],["300×",300]]){ const b=document.createElement("button"); b.textContent=n; b.dataset.v=v;
+  b.onclick=()=>{ const ms=tiempoActual(); velocidad=v; modoReal=false; simBase=ms; realBase=performance.now(); actualizarUI(); };
+  document.getElementById("velocidades").appendChild(b); }
+
+document.getElementById("inLogo").onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader();
+  r.onload=()=>{ try{localStorage.setItem("logoParada18",r.result);}catch(_){} cargarLogo(r.result); }; r.readAsDataURL(f); };
+document.getElementById("btnLogoReset").onclick=()=>{ try{localStorage.removeItem("logoParada18");}catch(_){} cargarLogo(LOGO_ORIGINAL); };
+
+// leyenda
+function leyenda(id,orden){ const g=document.getElementById(id), ns="http://www.w3.org/2000/svg";
+  const mk=(tag,at)=>{const e=document.createElementNS(ns,tag); for(const k in at) e.setAttribute(k,at[k]); g.appendChild(e); return e;};
+  const busSvg=x=>{ mk("rect",{x,y:2,width:46,height:18,rx:4,fill:"currentColor"}); for(const wx of [x+9,x+20,x+31]) mk("rect",{x:wx,y:5,width:8,height:6,fill:"var(--panel)"});
+    for(const cx of [x+12,x+36]) mk("circle",{cx,cy:21,r:3.5,fill:"var(--panel)",stroke:"currentColor","stroke-width":1.5}); };
+  const fl=x=>mk("path",{d:`M${x} 9h13v-6l11 10-11 10v-6h-13z`,fill:"currentColor"});
+  if(orden==="A"){ busSvg(0); fl(52); } else { fl(0); busSvg(30); } }
+leyenda("lgA","A"); leyenda("lgB","B");
+
+const v=HORARIO.vigencia; document.getElementById("vigTxt").textContent=`${v[0].slice(6)}/${v[0].slice(4,6)}/${v[0].slice(0,4)} – ${v[1].slice(6)}/${v[1].slice(4,6)}/${v[1].slice(0,4)}`;
+
+let guardado=null; try{ guardado=localStorage.getItem("logoParada18"); }catch(_){}
+cargarLogo(guardado||LOGO_ORIGINAL);
+actualizarUI();
+(document.fonts?document.fonts.load('700 40px "Open Sans"').then(()=>document.fonts.load('400 40px "Open Sans"')):Promise.resolve())
+  .catch(()=>{}).finally(()=>{ ultimoMin=null; requestAnimationFrame(bucle); });
+</script>
+</body>
+</html>
